@@ -21,5 +21,6 @@ public class AdCategory {
     private Long adId;
     private Long categoryId;
     private String value;
+    private Integer parsingIteration;
 
 }

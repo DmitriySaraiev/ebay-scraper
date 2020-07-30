@@ -14,9 +14,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
-import javax.print.Doc;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Component
 public class EbayScraper implements CommandLineRunner {
@@ -38,11 +41,17 @@ public class EbayScraper implements CommandLineRunner {
         this.adCategoryRepository = adCategoryRepository;
     }
 
+    @SneakyThrows
     private void scrape(String sellerUrl) {
+        ExecutorService executorService = Executors.newFixedThreadPool(4);
+        List<Future> futures = new ArrayList<>();
         List<String> urls = scrapeAllUrls(sellerUrl);
-        int counter = 0;
+        AtomicInteger counter = new AtomicInteger();
         for (String url : urls) {
-            parseUrl(url, ++counter);
+            futures.add(executorService.submit(() -> {parseUrl(url, counter.incrementAndGet());}));
+        }
+        for (Future future : futures) {
+            future.get();
         }
     }
 
@@ -81,16 +90,43 @@ public class EbayScraper implements CommandLineRunner {
         Element priceEl = document.selectFirst("span[itemprop=price]");
         String priceStr = priceEl.text();
         Double price = Double.parseDouble(priceStr.replaceAll("[^.0-9]", ""));
-        Elements categoryElems = document.select("table[role=presentation] td");
-        for (Element categoryElem : categoryElems) {
 
+        String categoryLabel = null;
+        String categoryValue = null;
+
+        Element sellerDescElem = document.selectFirst("table#itmSellerDesc");
+        if(sellerDescElem != null) {
+            Elements categorySellerLabelElems = sellerDescElem.select("th");
+            for (Element categorySellerLabelElem : categorySellerLabelElems) {
+                categoryLabel = categorySellerLabelElem.text().replaceAll(":", "");;
+                categoryValue = categorySellerLabelElem.nextElementSibling().text();
+                logger.info("{} {}", categoryLabel, categoryValue);
+            }
         }
-        logger.info("{} {} {} {}", counter, url, name, price);
+
+        Elements categoryLabelElems = document.select("table[role=presentation] td.attrLabels");
+        Elements categoryValueElems = document.select("table[role=presentation] td[width]");
+        for (int i = 0; i < categoryLabelElems.size(); i++) {
+            Element categoryLabelElem = categoryLabelElems.get(i);
+            Element categoryValueElem = categoryValueElems.get(i);
+            categoryLabel = categoryLabelElem.text().replaceAll(":", "");;
+            categoryValue = categoryValueElem.text();
+
+            Element categoryValueMoreEl = categoryValueElem.selectFirst("span#hiddenContent");
+            if(categoryValueMoreEl!= null) {
+                Element aScriptEl = categoryValueMoreEl.selectFirst("a");
+                categoryValue = categoryValue.replaceAll(aScriptEl.text()+".*", "");
+            }
+            logger.info("{} {}", categoryLabel, categoryValue);
+        }
+        logger.info("{} {} {} {}\n\n", counter, url, name, price);
 
     }
 
     @Override
     public void run(String... args) throws Exception {
         scrape("https://www.ebay.co.uk/sch/Car-Parts/6030/m.html?_nkw&_armrs=1&_ipg&_from&_ssn=screwnutts&_dcat=6030&rt=nc&LH_ItemCondition=1000%7C1500%7C2500&_clu=2&_fcid=3&_localstpos=E10%207QZ&_stpos=E10%207QZ&gbr=1");
+//        parseUrl("https://www.ebay.co.uk/itm/OPEL-VAUXHALL-C1-4NZ-LATE-CORSA-ASTRA-CAMSHAFT-ONLY/392295122325?hash=item5b569c8595:g:YDwAAOSwgDpc1tsu", 1);
     }
+
 }
