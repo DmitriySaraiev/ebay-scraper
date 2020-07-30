@@ -18,6 +18,6 @@ public class Ad {
 
     private String url;
     private String name;
-    private String price;
+    private Double price;
 
 }
