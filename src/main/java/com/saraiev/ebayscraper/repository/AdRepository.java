@@ -8,5 +8,7 @@ import java.util.List;
 public interface AdRepository extends CrudRepository<Ad, Long> {
 
     List<Ad> findAll();
-    
+
+    Ad findByUrl(String url);
+
 }

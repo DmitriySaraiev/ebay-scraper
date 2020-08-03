@@ -19,5 +19,5 @@ public class Ad {
     private String url;
     private String name;
     private Double price;
-
+    private String categoryValue;
 }
